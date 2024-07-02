@@ -104,7 +104,6 @@ def play_game(maze, dimensions, size):
                 ahead = '道路'
             return ahead
 
-
     # 定义一个函数来处理移动
     def move_forward(move, dim, position, direction):
         for _ in range(move):
@@ -118,15 +117,22 @@ def play_game(maze, dimensions, size):
         return position
 
     # 定义一个函数来处理转向
-    def turn(direction, dim, dimensions, turn_right=True):
+    def turn(direction, dim, dimensions, turn_right=True, turn_back=False):
         # 创建旋转矩阵
         rotation_matrix = np.eye(dimensions, dtype=int)
         rotation_matrix[dim, dim] = 0
         rotation_matrix[(dim+1)%dimensions, (dim+1)%dimensions] = 0
-        rotation_matrix[dim, (dim+1)%dimensions] = 1 if turn_right else -1
-        rotation_matrix[(dim+1)%dimensions, dim] = -1 if turn_right else 1
-        # 旋转朝向向量
-        direction = np.dot(rotation_matrix, direction)
+        if turn_back:
+            direction = -direction  # 向后转，朝向向量反向
+        else:
+            if turn_right:
+                rotation_matrix[dim, (dim+1)%dimensions] = 1
+                rotation_matrix[(dim+1)%dimensions, dim] = -1
+            else:  # 向左转
+                rotation_matrix[dim, (dim+1)%dimensions] = -1
+                rotation_matrix[(dim+1)%dimensions, dim] = 1
+            # 旋转朝向向量
+            direction = np.dot(rotation_matrix, direction)
         return direction
 
     # 初始化dim变量的值
@@ -134,7 +140,6 @@ def play_game(maze, dimensions, size):
 
     # 初始化一个标志位来检查是否已经到达过终点
     reached_end = False
-
 
     while True:
         # 打印当前位置和朝向
@@ -156,7 +161,7 @@ def play_game(maze, dimensions, size):
             if command[0] == 'w':
                 position = move_forward(move, dim, position, direction)
             elif command[0] == 's':
-                direction = turn(direction, dim, dimensions, turn_right=False)
+                direction = turn(direction, dim, dimensions, turn_back=True)
                 print(f"向后转，前方是{get_ahead(dim, position, direction)}")
             elif command[0] == 'a':
                 direction = turn(direction, dim, dimensions, turn_right=False)
@@ -210,8 +215,6 @@ def game():
         end_time = time.time()
         print("恭喜你，你完成了所有的关卡！")
         print(f"你的总游玩时间是：{end_time - start_time}秒")
-
-
 
 
 

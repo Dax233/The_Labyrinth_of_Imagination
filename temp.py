@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import random
 import numpy as np
@@ -165,15 +166,24 @@ def play_game(maze, dimensions, size):
 
         print(f"前方是：{get_ahead(dim, position, direction)}")
 
-        # 获取玩家输入
-        command = input("请输入指令：")
+        def input_command():
+            # 获取玩家输入
+            command = input("请输入指令：")
 
-        # 解析玩家输入
-        if len(command) > 1 and command[1].isdigit():
-            dim = int(command[1])
-            command = command[2:]
-        else:
-            dim = 0
+            # 解析玩家输入
+            match = re.match(r'^(w[0-9]*|a|s|d)$', command)
+
+            if match:
+                if command[0] == 'w' and len(command) > 1:
+                    dim = int(command[1:])
+                else:
+                    dim = 0
+                return command, dim
+            else:
+                print("无效的输入！")
+                return input_command()  # 在递归调用时返回结果
+
+        command, dim = input_command()
         if command[0] in 'wasd':
             move = int(command[1:]) if len(command) > 1 else 1
             if command[0] == 'w':
@@ -218,13 +228,15 @@ def game():
             if dimensions > 2 :
                 print("达X太笨了还做不出高维度的迷宫QAQ~请重新输入你的维度信息吧~")
                 diy1()
+            return dimensions
             
         def diy2():
             size = int(input("请输入迷宫的边长："))
             if size > 29 :
                 print("达X太懒了还没做能够超过29边长的迷宫QAQ~请重新输入你的边长信息吧~")
                 diy2()
-
+            return size
+        
         dimensions = diy1()
         size = diy2()
 
@@ -241,6 +253,7 @@ def game():
     # 在每个关卡开始时，加载迷宫并开始游戏
     start_time = time.time()
     stages = sorted([f for f in os.listdir('maps') if f.startswith('stage') and f.endswith('.npy')])
+    print("w移动，ad左右转向，s向后转")
     for stage in stages:
         maze = np.load(os.path.join('maps', stage))
         dimensions = len(maze.shape)
@@ -259,4 +272,6 @@ def game():
 if __name__ == "__main__":
     if not os.path.exists('maps'):
         os.makedirs('maps')
-    game()
+    while True :
+        game()
+        print('游戏结束，开启新游戏或者右上角直接关闭游戏\n\n')

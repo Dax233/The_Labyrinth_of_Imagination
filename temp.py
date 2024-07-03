@@ -212,8 +212,6 @@ def play_game(maze, dimensions, size):
             return True
 
 
-
-
 def game():
     print("[1]开始游戏 [2]自定义模式 [3]退出游戏")
     choice = input("请输入你的选择：")

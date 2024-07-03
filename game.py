@@ -1,7 +1,36 @@
 import os
+import re
 import time
 import random
 import numpy as np
+import configparser
+
+def create_config():
+    config = configparser.ConfigParser()
+    config.add_section("Game Settings")
+    config.set("Game Settings", "show_position", "False")
+    config.set("Game Settings", "show_direction", "False")
+    config.set("Game Settings", "show_head", "False")
+
+    with open("config.ini", "w") as config_file:
+        config.write(config_file)
+
+def read_config():
+    config = configparser.ConfigParser()
+    config.read("config.ini")
+    show_position = config.getboolean("Game Settings", "show_position")
+    show_direction = config.getboolean("Game Settings", "show_direction")
+    show_head = config.getboolean("Game Settings", "show_head")
+    return show_position, show_direction, show_head
+
+# 在游戏开始时创建配置文件
+create_config()
+
+# 在游戏过程中读取配置文件
+show_position, show_direction, show_head = read_config()
+
+help={"操作指南：\nh——打开操作指南\nw[n]——向前n步，当n被省略时默认向前一步。\nq——仰转。\ne——俯转。\na[n]——左转至n维方向上，当n被省略时默认转向可转向的最低维度。\nd[n]——右转至n维方向上，当n被省略时默认转向可转向的最低维度。\ns——向后转。"}
+
 
 def generate_maze(dimensions, size):
     # 初始化一个空的迷宫网格，所有位置都标记为墙壁
@@ -87,6 +116,7 @@ def play_game(maze, dimensions, size):
     # 初始化玩家位置和朝向
     position = np.array([0]*dimensions, dtype=int)
     direction = np.eye(dimensions, dtype=int)[0]  # 初始朝向为第一个维度的正方向
+    head = np.eye(dimensions, dtype=int)[1]
 
     # 定义一个函数来获取前方的情况
     def get_ahead(dim, position, direction):
@@ -113,27 +143,37 @@ def play_game(maze, dimensions, size):
                 break
             else:
                 position = new_position
-        print(f"向前移动了{min(move, _+1)}格，前方是{get_ahead(dim, position, direction)}")
+                print(f"向前移动了{min(move, _+1)}格，前方是{get_ahead(dim, position, direction)}")
         return position
 
-    # 定义一个函数来处理转向
-    def turn(direction, dim, dimensions, turn_right=True, turn_back=False):
-        # 创建旋转矩阵
-        rotation_matrix = np.eye(dimensions, dtype=int)
-        rotation_matrix[dim, dim] = 0
-        rotation_matrix[(dim+1)%dimensions, (dim+1)%dimensions] = 0
-        if turn_back:
+    def turn(direction, head, dim, dimensions, command):
+        if command == 's':
             direction = -direction  # 向后转，朝向向量反向
-        else:
-            if turn_right:
-                rotation_matrix[dim, (dim+1)%dimensions] = 1
-                rotation_matrix[(dim+1)%dimensions, dim] = -1
-            else:  # 向左转
-                rotation_matrix[dim, (dim+1)%dimensions] = -1
-                rotation_matrix[(dim+1)%dimensions, dim] = 1
-            # 旋转朝向向量
-            direction = np.dot(rotation_matrix, direction)
-        return direction
+        elif command == 'q':
+            direction, head = head, -direction  # 仰转90度
+        elif command == 'e':
+            direction, head = -head, direction  # 俯转90度
+        elif command in 'ad':
+            # 检测头向量，面向量所在维度轴
+            non_zero_indices_d = np.nonzero(direction)
+            non_zero_indices_h = np.nonzero(head)
+            head_dim = non_zero_indices_h[0][0]
+            direction_dim = non_zero_indices_d[0][0]
+            # 检测指令输入中是否包含n参数
+            n = dim if dim != 0 else min(set(range(dimensions)) - {head_dim, direction_dim})
+            # 将数据预处理为三维空间的数据
+            mapping = sorted([head_dim, direction_dim, n])
+            direction_3d = np.array([direction[i] for i in mapping])
+            print(f"direction_3d：{list(map(int, direction_3d))}")
+            head_3d = np.array([head[i] for i in mapping])
+            # 计算头向量和朝向向量的叉积，得到垂直向量
+            cross_product = np.cross(head_3d, direction_3d)
+            # 根据命令选择叉积符号
+            direction_3d = cross_product if command[0] == 'a' else -cross_product
+            # 将结果转换回原来的高维空间
+            for i, j in enumerate(mapping):
+                direction[j] = direction_3d[i]
+        return direction, head
 
     # 初始化dim变量的值
     dim = 0
@@ -143,32 +183,52 @@ def play_game(maze, dimensions, size):
 
     while True:
         # 打印当前位置和朝向
-        print(f"当前位置：{list(position)}")
-        print(f"当前朝向：{list(direction)}")
+        if show_direction:
+            print(f"当前朝向：{list(direction)}")
+        if show_position:
+            print(f"当前位置：{list(position)}")
+        if show_head:
+            print(f"当前头向：{list(map(int, head))}")
         print(f"前方是：{get_ahead(dim, position, direction)}")
 
-        # 获取玩家输入
-        command = input("请输入指令：")
+        def input_command():
+            # 获取玩家输入
+            command = input("请输入指令：")
+            if command == 'h':
+                print(help)
+                return input_command()
 
-        # 解析玩家输入
-        if len(command) > 1 and command[1].isdigit():
-            dim = int(command[1])
-            command = command[2:]
-        else:
-            dim = 0
-        if command[0] in 'wasd':
+            # 解析玩家输入
+            match = re.match(r'^(w[0-9]*|a[0-9]*|s|d[0-9]*|q|e)$', command)
+
+            if match:
+                if command[0] in 'wad' and len(command) > 1:
+                    dim = int(command[1:]) - 1
+                else:
+                    dim = 0
+
+                # 检测头向量，面向量所在维度轴
+                non_zero_indices_d = np.nonzero(direction)
+                non_zero_indices_h = np.nonzero(head)
+                head_dim = non_zero_indices_h[0][0]
+                direction_dim = non_zero_indices_d[0][0]
+
+                if command[0] in 'ad' and (dim == head_dim or dim == direction_dim) :
+                    dim = 0
+                return command, dim
+            else:
+                print("无效的输入！")
+                return input_command()  # 在递归调用时返回结果
+            
+        command, dim = input_command()
+
+        if command[0] in 'wasdeq':
             move = int(command[1:]) if len(command) > 1 else 1
             if command[0] == 'w':
                 position = move_forward(move, dim, position, direction)
-            elif command[0] == 's':
-                direction = turn(direction, dim, dimensions, turn_back=True)
-                print(f"向后转，前方是{get_ahead(dim, position, direction)}")
-            elif command[0] == 'a':
-                direction = turn(direction, dim, dimensions, turn_right=False)
-                print(f"向左转，前方是{get_ahead(dim, position, direction)}")
-            elif command[0] == 'd':
-                direction = turn(direction, dim, dimensions, turn_right=True)
-                print(f"向右转，前方是{get_ahead(dim, position, direction)}")
+            elif command[0] in 'sdeqa':
+                direction, head = turn(direction, head, dim, dimensions, command[0])
+                print(f"转向后，前方是{get_ahead(dim, position, direction)}")
 
         # 检查是否到达终点并返回起点
         if maze[tuple(position)] == 'E':
@@ -188,8 +248,30 @@ def game():
         difficulty = int(input("请输入你的选择："))
         generate_mazes(difficulty)
     elif choice == '2':
-        dimensions = int(input("请输入迷宫的维度："))
-        size = int(input("请输入迷宫的边长："))
+
+        def diy1():
+            dimensions = int(input("请输入迷宫的维度："))
+            if dimensions < 2 :
+                print("不支持创建维度小于2的迷宫哦~")
+                return diy1()
+            if dimensions > 29 :
+                print("达X太懒了还没做能够超过29维度的迷宫QAQ~请重新输入你的维度信息吧~")
+                return diy1()
+            return dimensions
+            
+        def diy2():
+            size = int(input("请输入迷宫的边长："))
+            if size < 3 :
+                print("不支持创建边长小于3的迷宫哦~")
+                return diy2()
+            if size > 29 :
+                print("达X太懒了还没做能够超过29边长的迷宫QAQ~请重新输入你的边长信息吧~")
+                return diy2()
+            return size
+        
+        dimensions = diy1()
+        size = diy2()
+
         clear_maps()
         maze = generate_maze(dimensions, size)
         save_maze(maze, "maps/stage1")
@@ -203,6 +285,7 @@ def game():
     # 在每个关卡开始时，加载迷宫并开始游戏
     start_time = time.time()
     stages = sorted([f for f in os.listdir('maps') if f.startswith('stage') and f.endswith('.npy')])
+    print(help)
     for stage in stages:
         maze = np.load(os.path.join('maps', stage))
         dimensions = len(maze.shape)
@@ -221,4 +304,6 @@ def game():
 if __name__ == "__main__":
     if not os.path.exists('maps'):
         os.makedirs('maps')
-    game()
+    while True :
+        game()
+        print('游戏结束，开启新游戏或者右上角直接关闭游戏\n\n')

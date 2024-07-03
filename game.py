@@ -29,7 +29,7 @@ create_config()
 # 在游戏过程中读取配置文件
 show_position, show_direction, show_head = read_config()
 
-help={"操作指南：\nh——打开操作指南\nw[n]——向前n步，当n被省略时默认向前一步。\nq——仰转。\ne——俯转。\na[n]——左转至n维方向上，当n被省略时默认转向可转向的最低维度。\nd[n]——右转至n维方向上，当n被省略时默认转向可转向的最低维度。\ns——向后转。"}
+help="\n\n  操作指南：\n   h——打开操作指南\n   w[n]——向前n步，当n被省略时默认向前一步。\n   q——仰转。\n   e——俯转。\n   a[n]——左转至n维方向上，当n被省略时默认转向可转向的最低维度。\n   d[n]——右转至n维方向上，当n被省略时默认转向可转向的最低维度。\n   s——向后转。"
 
 
 def generate_maze(dimensions, size):
@@ -193,7 +193,7 @@ def play_game(maze, dimensions, size):
 
         def input_command():
             # 获取玩家输入
-            command = input("请输入指令：")
+            command = input("\n请输入指令：")
             if command == 'h':
                 print(help)
                 return input_command()
@@ -277,7 +277,8 @@ def game():
         save_maze(maze, "maps/stage1")
     elif choice == '3':
         print("退出游戏")
-        return
+        loop = False
+        return loop
     else:
         print("无效的输入，请重新输入")
         game()
@@ -290,7 +291,7 @@ def game():
         maze = np.load(os.path.join('maps', stage))
         dimensions = len(maze.shape)
         size = maze.shape[0]
-        print(f"{stage[:-4]}：{dimensions}维迷宫，边长{size}")
+        print(f"\n\n{stage[:-4]}：{dimensions}维迷宫，边长{size}\n")
         if not play_game(maze, dimensions, size):
             print("你输了")
             break
@@ -298,12 +299,14 @@ def game():
         end_time = time.time()
         print("恭喜你，你完成了所有的关卡！")
         print(f"你的总游玩时间是：{end_time - start_time}秒")
+    return True
 
 
 
 if __name__ == "__main__":
     if not os.path.exists('maps'):
         os.makedirs('maps')
-    while True :
-        game()
+    loop = True
+    while loop :
+        loop = game()
         print('游戏结束，开启新游戏或者右上角直接关闭游戏\n\n')

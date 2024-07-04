@@ -24,12 +24,13 @@ def read_config():
     return show_position, show_direction, show_head
 
 # 在游戏开始时创建配置文件
-create_config()
+if not os.path.exists('config.ini'):
+    create_config()
 
 # 在游戏过程中读取配置文件
 show_position, show_direction, show_head = read_config()
 
-help="\n\n  操作指南：\n   h——打开操作指南\n   w[n]——向前n步，当n被省略时默认向前一步。\n   q——仰转。\n   e——俯转。\n   a[n]——左转至n维方向上，当n被省略时默认转向可转向的最低维度。\n   d[n]——右转至n维方向上，当n被省略时默认转向可转向的最低维度。\n   s——向后转。"
+help="\n\n  操作指南：\n   w[n]——向前n步，当n被省略时默认向前一步。\n   q——仰转。\n   e——俯转。\n   a[n]——左转至n维方向上，当n被省略时默认转向可转向的最低维度。\n   d[n]——右转至n维方向上，当n被省略时默认转向可转向的最低维度。\n   s——向后转。\n   h——打开操作指南。\n  r——回到主菜单。\n"
 
 
 def generate_maze(dimensions, size):
@@ -54,11 +55,19 @@ def generate_maze(dimensions, size):
 
     # 从起点开始DFS
     dfs([0]*dimensions)
-
-    # 随机选择一个位置作为终点
-    end_coords = [random.randint(0, size - 1) for _ in range(dimensions)]
-    maze[tuple(end_coords)] = 'E'
+    # save_maze(maze, "temp")
     maze[tuple([0]*dimensions)] = 'S'
+    # 随机选择一个标记为 'R' 的位置作为终点
+    road_positions = np.argwhere(maze == 'R')
+    end_coords = road_positions[random.randint(0, len(road_positions) - 1)]
+    maze[tuple(end_coords)] = 'E'
+
+    # # 打开文件并写入调试信息
+    # with open('debug.txt', 'w') as f:
+    #     # 遍历迷宫的每一个格子
+    #     for index in np.ndindex(maze.shape):
+    #         # 将坐标和对应的值写入到文件中
+    #         f.write(f'{index}: {maze[index]}\n')
 
     return maze
 
@@ -117,11 +126,13 @@ def play_game(maze, dimensions, size):
     position = np.array([0]*dimensions, dtype=int)
     direction = np.eye(dimensions, dtype=int)[0]  # 初始朝向为第一个维度的正方向
     head = np.eye(dimensions, dtype=int)[1]
-
+    
     # 定义一个函数来获取前方的情况
-    def get_ahead(dim, position, direction):
+    def get_ahead(position, direction):
         ahead = position + direction
-        if any(p < 0 or p >= size for p in ahead) or maze[tuple(ahead.astype(int))] == 'W':
+        size = np.array(maze.shape)
+
+        if any(p < 0 or p >= s for p, s in zip(ahead, size)) or maze[tuple(ahead.astype(int))] == 'W':
             return '墙壁'
         else:
             if maze[tuple(ahead.astype(int))] == 'W':
@@ -143,7 +154,7 @@ def play_game(maze, dimensions, size):
                 break
             else:
                 position = new_position
-                print(f"向前移动了{min(move, _+1)}格，前方是{get_ahead(dim, position, direction)}")
+                print(f"向前移动了{min(move, _+1)}格，前方是{get_ahead(position, direction)}")
         return position
 
     def turn(direction, head, dim, dimensions, command):
@@ -164,7 +175,6 @@ def play_game(maze, dimensions, size):
             # 将数据预处理为三维空间的数据
             mapping = sorted([head_dim, direction_dim, n])
             direction_3d = np.array([direction[i] for i in mapping])
-            print(f"direction_3d：{list(map(int, direction_3d))}")
             head_3d = np.array([head[i] for i in mapping])
             # 计算头向量和朝向向量的叉积，得到垂直向量
             cross_product = np.cross(head_3d, direction_3d)
@@ -184,28 +194,26 @@ def play_game(maze, dimensions, size):
     while True:
         # 打印当前位置和朝向
         if show_direction:
-            print(f"当前朝向：{list(direction)}")
+            print(f"当前朝向：{list(map(int, direction))}")
         if show_position:
-            print(f"当前位置：{list(position)}")
+            print(f"当前位置：{list(map(int, position))}")
         if show_head:
             print(f"当前头向：{list(map(int, head))}")
-        print(f"前方是：{get_ahead(dim, position, direction)}")
+        print(f"前方是：{get_ahead(position, direction)}")
 
         def input_command():
-            # 获取玩家输入
-            command = input("\n请输入指令：")
-            if command == 'h':
-                print(help)
-                return input_command()
+            while True:
+                # 获取玩家输入
+                command = input("\n请输入指令：")
+                if command == 'h':
+                    print(help)
+                    continue
 
-            # 解析玩家输入
-            match = re.match(r'^(w[0-9]*|a[0-9]*|s|d[0-9]*|q|e)$', command)
+                if command == 'r':
+                    return 'restart', 0
 
-            if match:
-                if command[0] in 'wad' and len(command) > 1:
-                    dim = int(command[1:]) - 1
-                else:
-                    dim = 0
+                # 解析玩家输入
+                match = re.match(r'^(w[0-9]*|a[0-9]*|s|d[0-9]*|q|e)$', command)
 
                 # 检测头向量，面向量所在维度轴
                 non_zero_indices_d = np.nonzero(direction)
@@ -213,14 +221,41 @@ def play_game(maze, dimensions, size):
                 head_dim = non_zero_indices_h[0][0]
                 direction_dim = non_zero_indices_d[0][0]
 
-                if command[0] in 'ad' and (dim == head_dim or dim == direction_dim) :
-                    dim = 0
-                return command, dim
-            else:
-                print("无效的输入！")
-                return input_command()  # 在递归调用时返回结果
-            
+                if match:
+                    if command[0] in 'ad' and dimensions == 2:
+                        print("二维世界里没有左右哦~请用q\e转向吧！")
+                        continue
+
+                    if command[0] in 'w' and len(command) > 1:
+                        dim = int(command[1:])
+                    else:
+                        dim = 0
+
+                    if command[0] in 'ad' and len(command) > 1:
+                        dim = int(command[1:]) - 1
+                        if dim == head_dim:
+                            print("如果要转向到头顶和脚下，请使用q\e指令哦~")
+                            continue
+                        # print(f"dim：{dim}")
+                        # print(f"dimensions：{dimensions}")
+                        if dim > dimensions - 1:
+                            print("不可转向到当前迷宫所拥有的最大维数哦~")
+                            continue
+                    else:
+                        dim = 0
+
+
+
+                    if command[0] in 'ad' and dim == direction_dim :
+                        dim = 0
+                    return command, dim
+                else:
+                    print("无效的输入！")
+        
         command, dim = input_command()
+
+        if command == 'restart':
+            return 'restart'
 
         if command[0] in 'wasdeq':
             move = int(command[1:]) if len(command) > 1 else 1
@@ -228,7 +263,7 @@ def play_game(maze, dimensions, size):
                 position = move_forward(move, dim, position, direction)
             elif command[0] in 'sdeqa':
                 direction, head = turn(direction, head, dim, dimensions, command[0])
-                print(f"转向后，前方是{get_ahead(dim, position, direction)}")
+                print(f"转向后，前方是{get_ahead(position, direction)}")
 
         # 检查是否到达终点并返回起点
         if maze[tuple(position)] == 'E':
@@ -241,58 +276,72 @@ def play_game(maze, dimensions, size):
 
 
 def game():
-    print("[1]开始游戏 [2]自定义模式 [3]退出游戏")
-    choice = input("请输入你的选择：")
-    if choice == '1':
-        print("请选择难度：[1] [2] [3] [4]")
-        difficulty = int(input("请输入你的选择："))
-        generate_mazes(difficulty)
-    elif choice == '2':
+    while True:
+        print("[1]开始游戏 [2]自定义模式 [3]退出游戏")
+        choice = input("请输入你的选择：")
+        if choice == '1':
+            print("请选择难度：[1] [2] [3] [4]")
+            difficulty = int(input("请输入你的选择："))
+            generate_mazes(difficulty)
+            break
+        elif choice == '2':
 
-        def diy1():
-            dimensions = int(input("请输入迷宫的维度："))
-            if dimensions < 2 :
-                print("不支持创建维度小于2的迷宫哦~")
-                return diy1()
-            if dimensions > 29 :
-                print("达X太懒了还没做能够超过29维度的迷宫QAQ~请重新输入你的维度信息吧~")
-                return diy1()
-            return dimensions
-            
-        def diy2():
-            size = int(input("请输入迷宫的边长："))
-            if size < 3 :
-                print("不支持创建边长小于3的迷宫哦~")
-                return diy2()
-            if size > 29 :
-                print("达X太懒了还没做能够超过29边长的迷宫QAQ~请重新输入你的边长信息吧~")
-                return diy2()
-            return size
-        
-        dimensions = diy1()
-        size = diy2()
+            def diy1():
+                while True:
+                    dimensions = input("请输入迷宫的维度(维度越高，生成迷宫的时间越长，地图文件越大，请注意内存和存储和时间上的安排)：")
+                    if not dimensions.isdigit():
+                        print("请输入一个有效的数字")
+                        continue
+                    dimensions = int(dimensions)
+                    if dimensions < 2 :
+                        print("不支持创建维度小于2的迷宫哦~")
+                        continue
+                    if dimensions > 29 :
+                        print("达X太懒了还没做能够超过29维度的迷宫的功能QAQ~请重新输入你的维度信息吧~")
+                        continue
+                    return dimensions
 
-        clear_maps()
-        maze = generate_maze(dimensions, size)
-        save_maze(maze, "maps/stage1")
-    elif choice == '3':
-        print("退出游戏")
-        loop = False
-        return loop
-    else:
-        print("无效的输入，请重新输入")
-        game()
+            def diy2():
+                while True:
+                    size = input("请输入迷宫的边长：")
+                    if not size.isdigit():
+                        print("请输入一个有效的数字")
+                        continue
+                    size = int(size)
+                    if size < 3 :
+                        print("不支持创建边长小于3的迷宫哦~")
+                        continue
+                    if size > 29 :
+                        print("达X太懒了还没做能够超过29边长的迷宫的功能QAQ~请重新输入你的边长信息吧~")
+                        continue
+                    return size
+
+            dimensions = diy1()
+            size = diy2()
+
+
+            clear_maps()
+            maze = generate_maze(dimensions, size)
+            save_maze(maze, "maps/stage1")
+            break
+        elif choice == '3':
+            print("退出游戏")
+            return False
+        else:
+            print("无效的输入，请重新输入")
 
     # 在每个关卡开始时，加载迷宫并开始游戏
     start_time = time.time()
     stages = sorted([f for f in os.listdir('maps') if f.startswith('stage') and f.endswith('.npy')])
-    print(help)
     for stage in stages:
         maze = np.load(os.path.join('maps', stage))
         dimensions = len(maze.shape)
         size = maze.shape[0]
         print(f"\n\n{stage[:-4]}：{dimensions}维迷宫，边长{size}\n")
-        if not play_game(maze, dimensions, size):
+        result = play_game(maze, dimensions, size)
+        if result == 'restart':  # 检查特殊的值
+            return True  # 结束当前的游戏并开始新的游戏
+        elif not result:
             print("你输了")
             break
     else:
@@ -307,6 +356,7 @@ if __name__ == "__main__":
     if not os.path.exists('maps'):
         os.makedirs('maps')
     loop = True
+    print(help)
     while loop :
         loop = game()
         print('游戏结束，开启新游戏或者右上角直接关闭游戏\n\n')

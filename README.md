@@ -1,1 +1,1 @@
-# DarkMaze
+# The_Labyrinth_of_Imagination

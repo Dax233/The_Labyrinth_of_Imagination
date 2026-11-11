@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "labyrinth-of-imagination"
+version = "0.2.0"
+description = "The Labyrinth of Imagination —— 用文字在 N 维迷宫里寻找宝藏的小游戏"
+readme = "README.md"
+license = { text = "AGPL-3.0" }
+requires-python = ">=3.9"
+authors = [{ name = "Bakadax" }]
+keywords = ["game", "maze", "terminal", "n-dimensional"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: GNU Affero General Public License v3",
+  "Environment :: Console",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+labyrinth = "labyrinth.game:main"
+
+[tool.setuptools.packages.find]
+include = ["labyrinth*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
